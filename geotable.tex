@@ -1,0 +1,30 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}  
+\usepackage{booktabs} 
+\usepackage{csvsimple}
+\usepackage{tabularray}
+
+\begin{document}
+
+\begin{tblr}{
+    hlines,
+    vlines,
+    colspec={ccccc},
+    cells={mode=math},
+    cell{1}{3}={mode=text,font=\bfseries},
+    cell{3}{1}={mode=text,font=\bfseries}
+}
+    \SetCell[c=2,r=2]{} & & \SetCell[c=3]{} Mother\\
+    & & u_n & v_n & 0.5w_n\\
+    \SetCell[r=3]{} Father & u_n & u_n^2 & u_nv_n & 0.5u_nw_n\\
+    & v_n & u_nv_n & v_n^2 & 0.5v_nw_n\\
+    & 0.5w_n & 0.5u_nw_n & 0.5v_nw_n & 0.25w_n^2\\
+\end{tblr}
+
+
+
+\begin{table}[h]
+\centering
+\csvautobooktabular{geological_time_chart.csv}
+\end{table}
+\end{document}
