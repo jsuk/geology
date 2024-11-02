@@ -3,3 +3,4 @@
 - texlive
 - texlive-pictures
 - texlive-latex-extra
+- texlive-luatex
