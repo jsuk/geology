@@ -3,6 +3,9 @@
 \usepackage{booktabs} 
 \usepackage[l3]{csvsimple}
 \usepackage{tabularray}
+\usepackage[table]{xcolor}
+% \SetTblrInner{row{odd}={blue9},row{even}={green9},row{1}={yellow9}}
+\SetTblrInner{row{1}={red}}
 
 \begin{document}
 
@@ -49,7 +52,7 @@
       width=1.1\linewidth,
 %      hlines
   },
-  table head=eon & era & period & epoch & age & chron & ma \\\toprule,
+  table head={\color{white} \bfseries  eon & \color{white} \bfseries era & period & epoch & age & chron & ma \\\toprule},
   late after line=\\\midrule,
   late after last line=\\\bottomrule,
   head to column names,
