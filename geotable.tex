@@ -4,6 +4,7 @@
 \usepackage[l3]{csvsimple}
 \usepackage{tabularray}
 \usepackage[table]{xcolor}
+\usepackage{plantuml}
 % \SetTblrInner{row{odd}={blue9},row{even}={green9},row{1}={yellow9}}
 \SetTblrInner{row{1}={red}}
 
@@ -59,5 +60,10 @@
 ]{geological_time_chart.csv}{}{%
 	\noexpand\textit{\eon} & \noexpand\textit{\era} & {\period} & {\epoch} & {\age} & {\chron} & {\ma}
 }
+\begin{plantuml}
+  @startuml
+  Alice -> Bob: test
+  @enduml
+\end{plantuml}
 
 \end{document}
