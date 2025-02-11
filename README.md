@@ -7,5 +7,7 @@
 # file generation
  $ uname -a
  $ pdflatex geotable.tex
+ $ pkg install graphviz
+ $ mktexfmt lualatex.fmt
  $ PLANTUML_JAR=/data/data/com.termux/files/usr/share/java/plantuml.jar lualatex -shell-escape geotable.tex
  $ termux-open geotable.pdf
