@@ -88,7 +88,7 @@ PREFIX time: <http://www.w3.org/2006/time#>
 PREFIX ts: <http://resource.geosciml.org/vocabulary/timescale/>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT ?x ?from ?to
+SELECT ?x ?from ?to ?color
 WHERE {
   ?x a skos:Concept;
   skos:prefLabel ?title;
@@ -97,6 +97,7 @@ WHERE {
   time:hasEnd ?et.
   ?bt ischart:inMYA ?from.
   ?et ischart:inMYA ?to.
+  OPTIONAL { ?x sdo:color ?color . }
 } order by desc(?to)
 `, {
       sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
@@ -105,10 +106,11 @@ WHERE {
         const name = data.get('x').value.split('/').pop();
         const from = parseFloat(data.get('from').value);
         const to = parseFloat(data.get('to').value);
+        const color = data.get('color') ? data.get('color').value : 'rgba(54, 162, 235, 0.5)'; // Default color if not found
 
         chartLabels.push(name);
-        originalData.push([to, from]);
-        logData.push([to === 0 ? 0.001 : to, from]);
+        originalData.push({x: [to, from], y: name, color: color});
+        logData.push({x: [to === 0 ? 0.001 : to, from], y: name, color: color});
 
         const row = resultsTableBody.insertRow();
         row.insertCell().textContent = name;
@@ -133,7 +135,7 @@ WHERE {
             datasets: [{
               label: 'Geological Time Range (mya)',
               data: currentScaleType === 'logarithmic' ? logData : originalData, // Use correct data
-              backgroundColor: 'rgba(54, 162, 235, 0.5)',
+              backgroundColor: (currentScaleType === 'logarithmic' ? logData : originalData).map(item => item.color),
               borderColor: 'rgba(54, 162, 235, 1)',
               borderWidth: 1,
               minBarLength: 2 // Guarantee visibility
