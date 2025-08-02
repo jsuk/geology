@@ -19,6 +19,7 @@
   </select>
   <button id="linear-scale-btn">Linear Scale</button>
   <button id="log-scale-btn">Logarithmic Scale</button>
+  <button id="stacked-bar-btn">Stacked Bar</button>
   <div id="results">
     <canvas id="timeRangeChart"></canvas>
     <table id="results-table">
@@ -45,14 +46,30 @@
   const linearScaleBtn = document.getElementById('linear-scale-btn');
   const logScaleBtn = document.getElementById('log-scale-btn');
   const engine = new Comunica.QueryEngine();
+  const stackedBarBtn = document.getElementById('stacked-bar-btn');
   let timeRangeChart;
   let originalData = [];
   let logData = [];
   let chartLabels = [];
   let currentScaleType = 'linear'; // Default to linear scale
+  let currentChartType = 'bar'; // Default to bar chart
+
+  function updateChartType(chartType) {
+    currentChartType = chartType;
+    if (currentChartType === 'stacked') {
+      stackedBarBtn.textContent = 'Bar Chart';
+    } else {
+      stackedBarBtn.textContent = 'Stacked Bar';
+    }
+    executeQuery(); // Re-execute query to redraw chart with new type
+  }
 
   function updateChartScale(scaleType) {
     currentScaleType = scaleType;
+    if (currentChartType === 'stacked') { // If stacked, scale doesn't apply to x-axis
+      executeQuery();
+      return;
+    }
     if (!timeRangeChart) return;
     const isLog = scaleType === 'logarithmic';
     timeRangeChart.data.datasets[0].data = isLog ? logData : originalData;
@@ -98,7 +115,7 @@ WHERE {
   ?bt ischart:inMYA ?from.
   ?et ischart:inMYA ?to.
   OPTIONAL { ?x sdo:color ?color . }
-} order by desc(?to)
+} ORDER BY asc(?to)
 `, {
       sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
     }).then(function (bindingsStream) {
@@ -128,46 +145,98 @@ WHERE {
         if (timeRangeChart) {
           timeRangeChart.destroy();
         }
-        timeRangeChart = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: chartLabels,
-            datasets: [{
-              label: 'Geological Time Range (mya)',
-              data: currentScaleType === 'logarithmic' ? logData : originalData, // Use correct data
-              backgroundColor: (currentScaleType === 'logarithmic' ? logData : originalData).map(item => item.color),
-              borderColor: 'rgba(54, 162, 235, 1)',
-              borderWidth: 1,
-              minBarLength: 2 // Guarantee visibility
-            }]
-          },
-          options: {
-            maintainAspectRatio: false, // Allow container to control height
-            indexAxis: 'y',
-            scales: {
-              x: {
-                type: currentScaleType, // Use correct scale
-                min: currentScaleType === 'logarithmic' ? 0.001 : 0,
-                title: {
-                  display: true,
-                  text: currentScaleType === 'logarithmic' ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)'
+
+        let chartConfig;
+
+        if (currentChartType === 'stacked') {
+          const stackedDatasets = originalData.map(item => {
+            const duration = item.x[1] - item.x[0]; // from - to
+            return {
+              label: item.y, // name of the period
+              data: [duration],
+              backgroundColor: item.color,
+              borderColor: item.color,
+              borderWidth: 1
+            };
+          });
+
+          chartConfig = {
+            type: 'bar',
+            data: {
+              labels: ['Geological Time'], // Single label for the single stacked bar
+              datasets: stackedDatasets
+            },
+            options: {
+              maintainAspectRatio: false,
+              indexAxis: 'y',
+              scales: {
+                x: {
+                  stacked: true,
+                  min: 0,
+                  title: {
+                    display: true,
+                    text: 'Millions of Years Ago (mya)'
+                  }
+                },
+                y: {
+                  stacked: true,
+                  beginAtZero: true,
+                  ticks: {
+                    padding: 40
+                  }
                 }
               },
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  padding: 40
+              plugins: {
+                title: {
+                  display: true,
+                  text: `Geological Time Scale - Stacked Bar for ${selectedRank}`
                 }
               }
+            }
+          };
+        } else { // Existing bar chart logic
+          chartConfig = {
+            type: 'bar',
+            data: {
+              labels: chartLabels,
+              datasets: [{
+                label: 'Geological Time Range (mya)',
+                data: currentScaleType === 'logarithmic' ? logData : originalData,
+                backgroundColor: (currentScaleType === 'logarithmic' ? logData : originalData).map(item => item.color),
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                minBarLength: 2
+              }]
             },
-            plugins: {
-              title: {
-                display: true,
-                text: `Geological Time Ranges for ${selectedRank}`
+            options: {
+              maintainAspectRatio: false,
+              indexAxis: 'y',
+              scales: {
+                x: {
+                  type: currentScaleType,
+                  min: currentScaleType === 'logarithmic' ? 0.001 : 0,
+                  title: {
+                    display: true,
+                    text: currentScaleType === 'logarithmic' ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)'
+                  }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    padding: 40
+                  }
+                }
+              },
+              plugins: {
+                title: {
+                  display: true,
+                  text: `Geological Time Ranges for ${selectedRank}`
+                }
               }
             }
-          }
-        });
+          };
+        }
+        timeRangeChart = new Chart(ctx, chartConfig);
       });
     });
   }
@@ -175,6 +244,13 @@ WHERE {
   rankSelector.addEventListener('change', executeQuery);
   linearScaleBtn.addEventListener('click', () => updateChartScale('linear'));
   logScaleBtn.addEventListener('click', () => updateChartScale('logarithmic'));
+  document.getElementById('stacked-bar-btn').addEventListener('click', () => {
+    if (currentChartType === 'stacked') {
+      updateChartType('bar');
+    } else {
+      updateChartType('stacked');
+    }
+  });
 
   // Initial query execution
   executeQuery();
