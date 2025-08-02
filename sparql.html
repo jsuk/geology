@@ -3,17 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SPARQL Query Example</title>
+  <title>Geological Time Scale SPARQL Query</title>
   <link rel="stylesheet" href="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.css">
 </head>
 <body>
-  <h1>SPARQL Query Example</h1>
-  <p>Check the console for results.</p>
+  <h1>Geological Time Scale SPARQL Query</h1>
+  <label for="rank-selector">Select Rank:</label>
+  <select id="rank-selector">
+    <option value="Super-Eon">Super-Eon</option>
+    <option value="Eon">Eon</option>
+    <option value="Era">Era</option>
+    <option value="Period">Period</option>
+    <option value="Epoch">Epoch</option>
+    <option value="Age">Age</option>
+  </select>
+  <button id="linear-scale-btn">Linear Scale</button>
+  <button id="log-scale-btn">Logarithmic Scale</button>
+  <div id="results">
+    <canvas id="timeRangeChart"></canvas>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>From (mya)</th>
+          <th>To (mya)</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
 </body>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.js"></script>
 <script language="JavaScript">
-  new Comunica.QueryEngine().queryBindings(`
+  const rankSelector = document.getElementById('rank-selector');
+  const resultsTableBody = document.querySelector('#results-table tbody');
+  const ctx = document.getElementById('timeRangeChart').getContext('2d');
+  const linearScaleBtn = document.getElementById('linear-scale-btn');
+  const logScaleBtn = document.getElementById('log-scale-btn');
+  const engine = new Comunica.QueryEngine();
+  let timeRangeChart;
+  let originalData = [];
+  let logData = [];
+  let chartLabels = [];
+  let currentScaleType = 'logarithmic'; // Default to log scale
+
+  function updateChartScale(scaleType) {
+    currentScaleType = scaleType;
+    if (!timeRangeChart) return;
+    const isLog = scaleType === 'logarithmic';
+    timeRangeChart.data.datasets[0].data = isLog ? logData : originalData;
+    timeRangeChart.options.scales.x.type = scaleType;
+    timeRangeChart.options.scales.x.title.text = isLog ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)';
+    timeRangeChart.options.scales.x.min = isLog ? 0.001 : 0;
+    timeRangeChart.update();
+  }
+
+  function executeQuery() {
+    const selectedRank = rankSelector.value;
+    resultsTableBody.innerHTML = ''; // Clear previous results
+
+    // Reset data arrays
+    chartLabels = [];
+    originalData = [];
+    logData = [];
+
+    engine.queryBindings(`
 PREFIX ti: <http://www.ontologydesignpatterns.org/cp/owl/timeinterval.owl#>
 PREFIX cs: <http://resource.geosciml.org/classifier/ics/ischart>
 PREFIX dcterms: <http://purl.org/dc/terms/>
@@ -34,25 +92,90 @@ SELECT ?x ?from ?to
 WHERE {
   ?x a skos:Concept;
   skos:prefLabel ?title;
-  gts:rank rank:Epoch;
+  gts:rank rank:${selectedRank};
   time:hasBeginning ?bt;
   time:hasEnd ?et.
   ?bt ischart:inMYA ?from.
   ?et ischart:inMYA ?to.
 } order by desc(?to)
-`, 
-//sources: ['https://fragments.dbpedia.org/2015/en'],
-{
-  sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
-}).then(function (bindingsStream) {
-  bindingsStream.on('data', function (data) {
-    // Each variable binding is an RDFJS term
-    console.log(data.get('x').value + ' ' + data.get('from').value + ' ' + data.get('to').value);
-    // display to html page
-    document.body.innerHTML += `<p>${data.get('x').value} ${data.get('from').value} ${data.get('to').value}</p>`;
-    
-  });
-});
+`, {
+      sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
+    }).then(function (bindingsStream) {
+      bindingsStream.on('data', function (data) {
+        const name = data.get('x').value.split('/').pop();
+        const from = parseFloat(data.get('from').value);
+        const to = parseFloat(data.get('to').value);
+
+        chartLabels.push(name);
+        originalData.push([to, from]);
+        logData.push([to === 0 ? 0.001 : to, from]);
+
+        const row = resultsTableBody.insertRow();
+        row.insertCell().textContent = name;
+        row.insertCell().textContent = from;
+        row.insertCell().textContent = to;
+      });
+
+      bindingsStream.on('end', function() {
+        // Dynamically set the container height
+        const chartContainer = document.getElementById('results');
+        // 50px per label + 100px for title, axis, etc.
+        const newHeight = (chartLabels.length * 50) + 100;
+        chartContainer.style.height = `${newHeight}px`;
+
+        if (timeRangeChart) {
+          timeRangeChart.destroy();
+        }
+        timeRangeChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: chartLabels,
+            datasets: [{
+              label: 'Geological Time Range (mya)',
+              data: currentScaleType === 'logarithmic' ? logData : originalData, // Use correct data
+              backgroundColor: 'rgba(54, 162, 235, 0.5)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1,
+              minBarLength: 2 // Guarantee visibility
+            }]
+          },
+          options: {
+            maintainAspectRatio: false, // Allow container to control height
+            indexAxis: 'y',
+            scales: {
+              x: {
+                type: currentScaleType, // Use correct scale
+                min: currentScaleType === 'logarithmic' ? 0.001 : 0,
+                title: {
+                  display: true,
+                  text: currentScaleType === 'logarithmic' ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)'
+                }
+              },
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  padding: 40
+                }
+              }
+            },
+            plugins: {
+              title: {
+                display: true,
+                text: `Geological Time Ranges for ${selectedRank}`
+              }
+            }
+          }
+        });
+      });
+    });
+  }
+
+  rankSelector.addEventListener('change', executeQuery);
+  linearScaleBtn.addEventListener('click', () => updateChartScale('linear'));
+  logScaleBtn.addEventListener('click', () => updateChartScale('logarithmic'));
+
+  // Initial query execution
+  executeQuery();
 </script>
 <script>
   // Ensure the Comunica library is loaded
