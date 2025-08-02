@@ -47,6 +47,7 @@
 </body>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
 <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.js"></script>
 <script language="JavaScript">
@@ -170,7 +171,10 @@ WHERE {
             });
 
             const chartContainer = document.getElementById('results');
-            const newHeight = (chartLabels.length * 50) + 100;
+            const numDatasets = currentChartType === 'stacked' ? originalData.length : chartLabels.length;
+            const heightPerDataset = currentChartType === 'stacked' ? 200 : 50;
+            const baseHeight = currentChartType === 'stacked' ? 150 : 100;
+            const newHeight = (numDatasets * heightPerDataset) + baseHeight;
             chartContainer.style.height = `${newHeight}px`;
 
             if (timeRangeChart) {
@@ -221,6 +225,14 @@ WHERE {
                             title: {
                                 display: true,
                                 text: `Geological Time Scale - Stacked Bar for ${selectedRank} and ${selectedRank2}`
+                            },
+                            datalabels: {
+                                anchor: 'center',
+                                align: 'center',
+                                color: 'white',
+                                formatter: (value, context) => {
+                                    return context.dataset.label;
+                                }
                             }
                         }
                     }
@@ -264,6 +276,13 @@ WHERE {
                             title: {
                                 display: true,
                                 text: `Geological Time Ranges for ${selectedRank} and ${selectedRank2}`
+                            },
+                            datalabels: {
+                                anchor: 'start',
+                                align: 'end',
+                                formatter: (value, context) => {
+                                    return value.y;
+                                }
                             }
                         }
                     }
@@ -273,6 +292,8 @@ WHERE {
         });
     });
   }
+
+  Chart.register(ChartDataLabels);
 
   rankSelector.addEventListener('change', executeQuery);
   rankSelector2.addEventListener('change', executeQuery);
