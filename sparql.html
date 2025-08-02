@@ -8,8 +8,18 @@
 </head>
 <body>
   <h1>Geological Time Scale SPARQL Query</h1>
-  <label for="rank-selector">Select Rank:</label>
+  <label for="rank-selector">Select Rank 1:</label>
   <select id="rank-selector">
+    <option value="Super-Eon">Super-Eon</option>
+    <option value="Eon">Eon</option>
+    <option value="Era">Era</option>
+    <option value="Period">Period</option>
+    <option value="Epoch">Epoch</option>
+    <option value="Age">Age</option>
+  </select>
+  <label for="rank-selector-2">Select Rank 2:</label>
+  <select id="rank-selector-2">
+    <option value="none">None</option>
     <option value="Super-Eon">Super-Eon</option>
     <option value="Eon">Eon</option>
     <option value="Era">Era</option>
@@ -41,6 +51,7 @@
 <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.js"></script>
 <script language="JavaScript">
   const rankSelector = document.getElementById('rank-selector');
+  const rankSelector2 = document.getElementById('rank-selector-2');
   const resultsTableBody = document.querySelector('#results-table tbody');
   const ctx = document.getElementById('timeRangeChart').getContext('2d');
   const linearScaleBtn = document.getElementById('linear-scale-btn');
@@ -81,6 +92,7 @@
 
   function executeQuery() {
     const selectedRank = rankSelector.value;
+    const selectedRank2 = rankSelector2.value;
     resultsTableBody.innerHTML = ''; // Clear previous results
 
     // Reset data arrays
@@ -88,7 +100,7 @@
     originalData = [];
     logData = [];
 
-    engine.queryBindings(`
+    const query = (rank) => `
 PREFIX ti: <http://www.ontologydesignpatterns.org/cp/owl/timeinterval.owl#>
 PREFIX cs: <http://resource.geosciml.org/classifier/ics/ischart>
 PREFIX dcterms: <http://purl.org/dc/terms/>
@@ -109,139 +121,161 @@ SELECT ?x ?from ?to ?color
 WHERE {
   ?x a skos:Concept;
   skos:prefLabel ?title;
-  gts:rank rank:${selectedRank};
+  gts:rank rank:${rank};
   time:hasBeginning ?bt;
   time:hasEnd ?et.
   ?bt ischart:inMYA ?from.
   ?et ischart:inMYA ?to.
   OPTIONAL { ?x sdo:color ?color . }
 } ORDER BY asc(?to)
-`, {
-      sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
-    }).then(function (bindingsStream) {
-      bindingsStream.on('data', function (data) {
-        const name = data.get('x').value.split('/').pop();
-        const from = parseFloat(data.get('from').value);
-        const to = parseFloat(data.get('to').value);
-        const color = data.get('color') ? data.get('color').value : 'rgba(54, 162, 235, 0.5)'; // Default color if not found
+`;
 
-        chartLabels.push(name);
-        originalData.push({x: [to, from], y: name, color: color});
-        logData.push({x: [to === 0 ? 0.001 : to, from], y: name, color: color});
+    const sources = ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'];
 
-        const row = resultsTableBody.insertRow();
-        row.insertCell().textContent = name;
-        row.insertCell().textContent = from;
-        row.insertCell().textContent = to;
-      });
+    const promise1 = engine.queryBindings(query(selectedRank), { sources });
+    const promise2 = selectedRank2 !== 'none' ? engine.queryBindings(query(selectedRank2), { sources }) : Promise.resolve(null);
 
-      bindingsStream.on('end', function() {
-        // Dynamically set the container height
-        const chartContainer = document.getElementById('results');
-        // 50px per label + 100px for title, axis, etc.
-        const newHeight = (chartLabels.length * 50) + 100;
-        chartContainer.style.height = `${newHeight}px`;
+    Promise.all([promise1, promise2]).then(([bindingsStream1, bindingsStream2]) => {
+        const processStream = (stream, dataArray) => {
+            return new Promise((resolve) => {
+                if (!stream) return resolve();
+                stream.on('data', function (data) {
+                    const name = data.get('x').value.split('/').pop();
+                    const from = parseFloat(data.get('from').value);
+                    const to = parseFloat(data.get('to').value);
+                    const color = data.get('color') ? data.get('color').value : 'rgba(54, 162, 235, 0.5)';
 
-        if (timeRangeChart) {
-          timeRangeChart.destroy();
-        }
+                    if (!chartLabels.includes(name)) {
+                        chartLabels.push(name);
+                    }
+                    dataArray.push({x: [to, from], y: name, color: color});
+                });
+                stream.on('end', resolve);
+            });
+        };
 
-        let chartConfig;
+        const data1 = [];
+        const data2 = [];
 
-        if (currentChartType === 'stacked') {
-          const stackedDatasets = originalData.map(item => {
-            const duration = item.x[1] - item.x[0]; // from - to
-            return {
-              label: item.y, // name of the period
-              data: [duration],
-              backgroundColor: item.color,
-              borderColor: item.color,
-              borderWidth: 1
-            };
-          });
+        Promise.all([processStream(bindingsStream1, data1), processStream(bindingsStream2, data2)]).then(() => {
+            originalData = [data1, data2.length > 0 ? data2 : null].filter(d => d);
+            logData = originalData.map(dataset => dataset.map(item => ({...item, x: [item.x[0] === 0 ? 0.001 : item.x[0], item.x[1]]})));
 
-          chartConfig = {
-            type: 'bar',
-            data: {
-              labels: ['Geological Time'], // Single label for the single stacked bar
-              datasets: stackedDatasets
-            },
-            options: {
-              maintainAspectRatio: false,
-              indexAxis: 'y',
-              scales: {
-                x: {
-                  stacked: true,
-                  min: 0,
-                  title: {
-                    display: true,
-                    text: 'Millions of Years Ago (mya)'
-                  }
-                },
-                y: {
-                  stacked: true,
-                  beginAtZero: true,
-                  ticks: {
-                    padding: 40
-                  }
-                }
-              },
-              plugins: {
-                title: {
-                  display: true,
-                  text: `Geological Time Scale - Stacked Bar for ${selectedRank}`
-                }
-              }
+            // Update table with data from the first rank
+            data1.forEach(item => {
+                const row = resultsTableBody.insertRow();
+                row.insertCell().textContent = item.y;
+                row.insertCell().textContent = item.x[1];
+                row.insertCell().textContent = item.x[0];
+            });
+
+            const chartContainer = document.getElementById('results');
+            const newHeight = (chartLabels.length * 50) + 100;
+            chartContainer.style.height = `${newHeight}px`;
+
+            if (timeRangeChart) {
+                timeRangeChart.destroy();
             }
-          };
-        } else { // Existing bar chart logic
-          chartConfig = {
-            type: 'bar',
-            data: {
-              labels: chartLabels,
-              datasets: [{
-                label: 'Geological Time Range (mya)',
-                data: currentScaleType === 'logarithmic' ? logData : originalData,
-                backgroundColor: (currentScaleType === 'logarithmic' ? logData : originalData).map(item => item.color),
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1,
-                minBarLength: 2
-              }]
-            },
-            options: {
-              maintainAspectRatio: false,
-              indexAxis: 'y',
-              scales: {
-                x: {
-                  type: currentScaleType,
-                  min: currentScaleType === 'logarithmic' ? 0.001 : 0,
-                  title: {
-                    display: true,
-                    text: currentScaleType === 'logarithmic' ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)'
-                  }
-                },
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    padding: 40
-                  }
-                }
-              },
-              plugins: {
-                title: {
-                  display: true,
-                  text: `Geological Time Ranges for ${selectedRank}`
-                }
-              }
+
+            let chartConfig;
+
+            if (currentChartType === 'stacked') {
+                const datasets = originalData.map((dataset, index) => {
+                    return dataset.map(item => {
+                        const duration = item.x[1] - item.x[0];
+                        return {
+                            label: item.y,
+                            data: [duration],
+                            backgroundColor: item.color,
+                            borderColor: item.color,
+                            borderWidth: 1,
+                            stack: `stack${index}`
+                        };
+                    });
+                }).flat();
+
+                chartConfig = {
+                    type: 'bar',
+                    data: {
+                        labels: ['Geological Time'],
+                        datasets: datasets
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                stacked: true,
+                                min: 0,
+                                title: {
+                                    display: true,
+                                    text: 'Millions of Years Ago (mya)'
+                                }
+                            },
+                            y: {
+                                stacked: true,
+                                beginAtZero: true
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Geological Time Scale - Stacked Bar for ${selectedRank} and ${selectedRank2}`
+                            }
+                        }
+                    }
+                };
+            } else {
+                const datasets = originalData.map((dataset, index) => ({
+                    label: `Geological Time Range (mya) - ${index === 0 ? selectedRank : selectedRank2}`,
+                    data: currentScaleType === 'logarithmic' ? logData[index] : dataset,
+                    backgroundColor: dataset.map(item => item.color),
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                    minBarLength: 2
+                }));
+
+                chartConfig = {
+                    type: 'bar',
+                    data: {
+                        labels: chartLabels,
+                        datasets: datasets
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                type: currentScaleType,
+                                min: currentScaleType === 'logarithmic' ? 0.001 : 0,
+                                title: {
+                                    display: true,
+                                    text: currentScaleType === 'logarithmic' ? 'Millions of Years Ago (mya) - Log Scale' : 'Millions of Years Ago (mya)'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    padding: 40
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Geological Time Ranges for ${selectedRank} and ${selectedRank2}`
+                            }
+                        }
+                    }
+                };
             }
-          };
-        }
-        timeRangeChart = new Chart(ctx, chartConfig);
-      });
+            timeRangeChart = new Chart(ctx, chartConfig);
+        });
     });
   }
 
   rankSelector.addEventListener('change', executeQuery);
+  rankSelector2.addEventListener('change', executeQuery);
   linearScaleBtn.addEventListener('click', () => updateChartScale('linear'));
   logScaleBtn.addEventListener('click', () => updateChartScale('logarithmic'));
   document.getElementById('stacked-bar-btn').addEventListener('click', () => {
