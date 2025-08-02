@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPARQL Query Example</title>
+  <link rel="stylesheet" href="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.css">
+</head>
+<body>
+  <h1>SPARQL Query Example</h1>
+  <p>Check the console for results.</p>
+</body>
+
+<script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.js"></script>
+<script language="JavaScript">
+  new Comunica.QueryEngine().queryBindings(`
+PREFIX ti: <http://www.ontologydesignpatterns.org/cp/owl/timeinterval.owl#>
+PREFIX cs: <http://resource.geosciml.org/classifier/ics/ischart>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX gts: <http://resource.geosciml.org/ontology/timescale/gts#>
+PREFIX ischart: <http://resource.geosciml.org/classifier/ics/ischart/>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rank: <http://resource.geosciml.org/ontology/timescale/rank/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sdo: <https://schema.org/>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX ts: <http://resource.geosciml.org/vocabulary/timescale/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?x ?from ?to
+WHERE {
+  ?x a skos:Concept;
+  skos:prefLabel ?title;
+  gts:rank rank:Epoch;
+  time:hasBeginning ?bt;
+  time:hasEnd ?et.
+  ?bt ischart:inMYA ?from.
+  ?et ischart:inMYA ?to.
+} order by desc(?to)
+`, 
+//sources: ['https://fragments.dbpedia.org/2015/en'],
+{
+  sources: ['https://stratigraphy.org/ICSchart/data/ChronostratChart2024-12.ttl'],
+}).then(function (bindingsStream) {
+  bindingsStream.on('data', function (data) {
+    // Each variable binding is an RDFJS term
+    console.log(data.get('x').value + ' ' + data.get('from').value + ' ' + data.get('to').value);
+    // display to html page
+    document.body.innerHTML += `<p>${data.get('x').value} ${data.get('from').value} ${data.get('to').value}</p>`;
+    
+  });
+});
+</script>
+<script>
+  // Ensure the Comunica library is loaded
+  if (typeof Comunica === 'undefined') {
+    console.error('Comunica library is not loaded.');
+  } else {
+    console.log('Comunica library loaded successfully.');
+  }
+</script>
+
+
+</html>
