@@ -230,6 +230,7 @@ WHERE {
                                 anchor: 'center',
                                 align: 'center',
                                 color: 'white',
+                                rotation: -45,
                                 formatter: (value, context) => {
                                     return context.dataset.label;
                                 }
@@ -268,7 +269,10 @@ WHERE {
                             y: {
                                 beginAtZero: true,
                                 ticks: {
-                                    padding: 40
+                                    padding: 40,
+                                    autoSkip: false,
+                                    maxRotation: 90,
+                                    minRotation: 0
                                 }
                             }
                         },
